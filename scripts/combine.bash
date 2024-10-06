@@ -117,7 +117,9 @@ while true; do
     break
   fi
   while IFS= read -r line; do
-    filename="$(find_file_path "$line")"
+    if ! filename="$(find_file_path "$line")" ; then
+      exit 1
+    fi
 
     if [[ -n "${already_included[$filename]}" ]]; then
       debug "Already included: $filename"

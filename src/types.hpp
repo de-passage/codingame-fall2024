@@ -1,11 +1,15 @@
 #pragma once
 
-#include <vector>
 #include <strong_types.hpp>
+#include <vector>
+
+using building_id =
+    dpsg::strong_types::strong_value<int, struct building_tag,
+                                     dpsg::strong_types::comparable>;
 
 struct transportation {
-  int start_building;
-  int end_building;
+  building_id start_building;
+  building_id end_building;
   int capacity;
 };
 

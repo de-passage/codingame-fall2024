@@ -1,0 +1,5 @@
+strong-types is header-only and can be used from CMake via:
+
+  find_package(strong-types 1.0.0)
+  target_link_libraries(main PRIVATE strong-types::strong-types)
+

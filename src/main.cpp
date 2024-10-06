@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include "types.hpp"
 
 using namespace std;
 

@@ -1,0 +1,8 @@
+.*
+!.gitignore
+!.clang*
+build/
+build-*/
+install/
+install-*/
+compile_commands.json

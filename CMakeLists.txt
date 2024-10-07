@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.29)
 
 project(codingame-fall-2024 LANGUAGES CXX)
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 find_package(strong-types 1.0.0 REQUIRED EXACT)
 
 set(SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
@@ -32,6 +36,10 @@ add_custom_command(
     ${strong-types_INCLUDE_DIRECTORIES}
     ${app_SOURCES}
     -o "${generated_file}"
+  COMMAND
+    ${CMAKE_COMMAND} -E echo "-- Copy the generate file to clipboard:"
+  COMMAND
+    ${CMAKE_COMMAND} -E echo "  xclip -i ${generated_file} -selection clipboard"
   )
 
 add_custom_target(

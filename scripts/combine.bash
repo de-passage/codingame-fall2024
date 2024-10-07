@@ -58,6 +58,9 @@ while (( $# > 0 )); do
       target_file="$2"
       shift
       ;;
+    --debug)
+      debug_mode=true
+      ;;
     --*)
       err "Unhandled option '$1'"
       ;;

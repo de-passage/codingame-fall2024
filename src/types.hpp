@@ -26,14 +26,20 @@ struct streamable {
                                        custom_modifiers::streamable>;
 
 DEFINE_ID_TYPE(building_id);
+consteval building_id operator""_bid(unsigned long long value) {
+  return building_id{static_cast<int>(value)};
+}
 DEFINE_ID_TYPE(pod_id)
+consteval pod_id operator""_pid(unsigned long long value) {
+  return pod_id{static_cast<int>(value)};
+}
 
 using capacity_t = dpsg::strong_types::number<int, struct capacity_tag,
                                               custom_modifiers::streamable>;
 using building_type =
     dpsg::strong_types::strong_value<unsigned int, struct building_type_tag,
                                      custom_modifiers::streamable,
-                                     dpsg::strong_types::comparable_with<int>>;
+                                     dpsg::strong_types::comparable_with<unsigned int>>;
 
 using resource_t = dpsg::strong_types::number<int, struct resource_tag,
                                               custom_modifiers::streamable>;

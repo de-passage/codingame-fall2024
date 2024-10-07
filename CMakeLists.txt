@@ -9,7 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(strong-types 1.0.0 REQUIRED EXACT)
 
 set(SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
-set(SOURCE_LIST main.cpp)
+set(SOURCE_LIST main.cpp math.cpp)
 list(TRANSFORM SOURCE_LIST PREPEND "${SOURCE_DIR}/")
 
 add_executable(app "${SOURCE_LIST}")
@@ -24,7 +24,13 @@ list(TRANSFORM app_INCLUDE_DIRECTORIES PREPEND "-I")
 list(TRANSFORM strong-types_INCLUDE_DIRECTORIES PREPEND "-I")
 
 set(generated_file "${CMAKE_CURRENT_BINARY_DIR}/result.cpp")
-set(generation_dependencies "${SOURCE_DIR}/types.hpp")
+set(generation_dependencies
+  types.hpp
+  actions.hpp
+  common.hpp
+  math.hpp
+)
+list(TRANSFORM generation_dependencies PREPEND "${SOURCE_DIR}/")
 
 add_custom_command(
   OUTPUT "${generated_file}"

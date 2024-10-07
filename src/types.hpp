@@ -17,29 +17,56 @@ struct streamable {
                         meta::tuple<st::shift_right, std::basic_ostream<char>>>,
             meta::apply<st::implement_binary_operation, T>> {};
 };
+
+namespace detail {
+template <class T> struct get_first;
+template <template <class...> class C, class T, class... Ts>
+struct get_first<C<T, Ts...>> {
+  using type = T;
+};
+} // namespace detail
+struct hashable {
+  template <class T> struct type {
+    using hashable = typename detail::get_first<T>::type;
+  };
+};
+
+template <class T>
+concept MadeHashable = requires(T obj) {
+  typename T::hashable;
+};
 } // namespace custom_modifiers
 
-#define DEFINE_ID_TYPE(identifier)                                             \
-  using identifier =                                                           \
-      dpsg::strong_types::strong_value<int, struct identifier##_tag,           \
-                                       dpsg::strong_types::comparable,         \
-                                       custom_modifiers::streamable>;
+namespace std {
+template <custom_modifiers::MadeHashable T> struct hash<T> {
+  std::size_t operator()(const T &value) const {
+    return std::hash<typename T::hashable>{}(
+        custom_modifiers::st::get_value_t{}(value));
+  }
+};
+} // namespace std
 
-DEFINE_ID_TYPE(building_id);
-consteval building_id operator""_bid(unsigned long long value) {
-  return building_id{static_cast<int>(value)};
-}
-DEFINE_ID_TYPE(pod_id)
-consteval pod_id operator""_pid(unsigned long long value) {
-  return pod_id{static_cast<int>(value)};
-}
+template <class Tag>
+using strong_id =
+    dpsg::strong_types::strong_value<int, Tag, dpsg::strong_types::comparable,
+                                     custom_modifiers::streamable,
+                                     custom_modifiers::hashable>;
+
+#define DEFINE_ID_TYPE(identifier, suffix)                                     \
+  using identifier = strong_id<struct identifier##_tag>;                       \
+  consteval identifier operator""_##suffix(unsigned long long value) {         \
+    return identifier{static_cast<identifier::value_type>(value)};             \
+  }
+
+DEFINE_ID_TYPE(building_id, bid);
+DEFINE_ID_TYPE(pod_id, pid);
 
 using capacity_t = dpsg::strong_types::number<int, struct capacity_tag,
                                               custom_modifiers::streamable>;
-using building_type =
-    dpsg::strong_types::strong_value<unsigned int, struct building_type_tag,
-                                     custom_modifiers::streamable,
-                                     dpsg::strong_types::comparable_with<unsigned int>>;
+using building_type = dpsg::strong_types::strong_value<
+    unsigned int, struct building_type_tag, custom_modifiers::streamable,
+    dpsg::strong_types::comparable_with<unsigned int>,
+    dpsg::strong_types::comparable, custom_modifiers::hashable>;
 
 using resource_t = dpsg::strong_types::number<int, struct resource_tag,
                                               custom_modifiers::streamable>;
@@ -61,8 +88,8 @@ struct pod {
   std::vector<building_id> stops;
 };
 
-template<class T>
-inline std::istream& operator>>(std::istream& in, std::vector<T>& vec) {
+template <class T>
+inline std::istream &operator>>(std::istream &in, std::vector<T> &vec) {
   int size;
   in >> size;
   vec.resize(size);

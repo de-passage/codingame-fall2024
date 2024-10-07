@@ -29,6 +29,7 @@ set(generation_dependencies
   actions.hpp
   common.hpp
   math.hpp
+  game.hpp
 )
 list(TRANSFORM generation_dependencies PREPEND "${SOURCE_DIR}/")
 

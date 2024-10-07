@@ -1,73 +1,67 @@
 #include "actions.hpp"
 #include "common.hpp"
+#include "game.hpp"
 #include "types.hpp"
 
 #include <algorithm>
 #include <iostream>
+#include <queue>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
-struct game {
-  resource_t resources;
-  std::vector<transportation> travel_routes;
-  std::vector<pod> pods;
-  std::vector<landing_pad> landing_pads;
-  std::vector<building> buildings;
+
+constexpr static inline std::hash<std::pair<building_id, building_id>>
+    hash_pair;
+
+using transfer_time = dpsg::strong_types::number<int, struct transfer_time_tag,
+                                                 custom_modifiers::streamable>;
+constexpr transfer_time operator""_tt(unsigned long long int v) {
+  return transfer_time{static_cast<int>(v)};
+}
+using worker_count = dpsg::strong_types::number<int, struct worker_count_tag,
+                                                custom_modifiers::streamable>;
+
+struct turn_data {
+  std::unordered_map<building_link, transfer_time> transfer_times;
+  std::unordered_map<building_id, building_id> direct_connections;
+  std::unordered_map<building_type, worker_count> worker_destinations;
 };
 
-std::istream &operator>>(std::istream &in, game &g) {
-  in >> g.resources;
-  std::cerr << "resources: " << g.resources << std::endl;
-  in.ignore();
-  in >> g.travel_routes;
+actions decide(const game &g) {
+  turn_data c;
 
-  std::cerr << "travel_routes: " << g.travel_routes.size() << std::endl;
-  for (const auto &route : g.travel_routes) {
-    std::cerr << "route: " << route.start_building << " -> "
-              << route.end_building << " (" << route.capacity << ")"
-              << std::endl;
-  }
-  in.ignore();
-  in >> g.pods;
-  std::cerr << "pods: " << g.pods.size() << std::endl;
-  for (const auto &pod : g.pods) {
-    std::cerr << "pod: " << pod.identifier << " -> ";
-    for (const auto &stop : pod.stops) {
-      std::cerr << stop << " ";
+  // Build an indexable table of connections and initialize transfer times
+  for (auto &transport : g.travel_routes) {
+    c.direct_connections.emplace(transport.start_building,
+                                 transport.end_building);
+    c.transfer_times.emplace(
+        std::pair{transport.start_building, transport.end_building}, 1_tt);
+    if (transport.capacity > 0) {
+      c.direct_connections.emplace(transport.end_building,
+                                   transport.end_building);
+      c.transfer_times.emplace(
+          std::pair{transport.end_building, transport.start_building}, 1_tt);
     }
-    std::cerr << std::endl;
   }
-  in.ignore();
 
-  std::vector<any_building> buildings;
-  in >> buildings;
-  for (auto &building : buildings) {
-    std::visit(
-        overloaded{
-            [&](landing_pad &&b) { g.landing_pads.push_back(std::move(b)); },
-            [&](struct building &&b) { g.buildings.push_back(std::move(b)); }},
-        std::move(building));
-  }
-  in.ignore();
-
-  std::cerr << "landing_pads: " << g.landing_pads.size() << std::endl;
-  for (const auto &pad : g.landing_pads) {
-    std::cerr << "pad: " << pad.identifier << " (" << pad.coords.x << ", "
-              << pad.coords.y << ") ";
-    for (const auto &worker : pad.expected_workers) {
-      std::cerr << worker << " ";
+  // Compute the shortest path from landing_pad to required building
+  for (auto &pad : g.landing_pads) {
+    for (auto worker : pad.expected_workers) {
+      c.worker_destinations[worker]++;
     }
-    std::cerr << std::endl;
+
+    for (auto &[destination, _] : c.worker_destinations) {
+      std::queue<building_id> to_visit;
+      std::unordered_set<building_id> visited;
+      for (auto &pad : g.landing_pads) {
+      }
+    }
   }
 
-  std::cerr << "buildings: " << g.buildings.size() << std::endl;
-  for (const auto &building : g.buildings) {
-    std::cerr << "building: " << building.identifier << " ("
-              << building.coords.x << ", " << building.coords.y << ") "
-              << building.type << std::endl;
-  }
-  return in;
+  return {};
 }
 
 int main() {
@@ -76,10 +70,6 @@ int main() {
   // game loop
   while (1) {
     std::cin >> g;
-    actions a;
-    a.push_back(build_tube{0_bid, 1_bid});
-    a.push_back(build_tube{0_bid, 2_bid});
-    a.push_back(build_pod{42_pid, {0_bid, 1_bid, 2_bid}});
-    std::cout << a << std::endl;
+    std::cout << decide(g) << std::endl;
   }
 }

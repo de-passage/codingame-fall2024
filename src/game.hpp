@@ -5,6 +5,7 @@
 #include "types.hpp"
 #include <algorithm>
 #include <iostream>
+#include <sstream>
 #include <unordered_set>
 
 using building_link = std::pair<building_id, building_id>;
@@ -29,7 +30,13 @@ struct game {
     if (it2 != landing_pads.end()) {
       return *it2;
     }
-    throw std::runtime_error("Building not found");
+    std::stringstream ss;
+    ss << "Building with id " << id << " not found";
+    throw std::runtime_error(ss.str());
+  }
+
+  segment get_segment(building_id start, building_id end) const {
+    return {get_building(start).coords, get_building(end).coords};
   }
 
   // Cache
@@ -57,11 +64,10 @@ inline void compute_possible_connections(const building &b, game &g) {
   over_buildings(g, [&](const building &other) {
     // Always keep the nodes ordered!!!
     auto pair = std::minmax(b.identifier, other.identifier);
-    over_buildings(g, [&](const building &third) {
-      g.possible_connection.emplace(pair.first, pair.second);
-    });
+    g.possible_connection.emplace(pair.first, pair.second);
   });
 
+  /*
   // We trim the connections made invalid by the new node
   // We need to remove:
   // - the connections that have the new building on the segment
@@ -76,8 +82,8 @@ inline void compute_possible_connections(const building &b, game &g) {
       // another building is on the segment
       over_buildings(g, [&](const building &other) {
         if (other.identifier != start_id && other.identifier != end_id) {
-          const auto &starter = g.get_building(start_id);
-          const auto &ender = g.get_building(end_id);
+          const auto &starter = b.identifier == start_id ? b : g.get_building(start_id);
+          const auto &ender = b.identifier == end_id ? b : g.get_building(end_id);
           if (on_segment({starter.coords, ender.coords}, other.coords)) {
             g.possible_connection.erase({start_id, end_id});
           }
@@ -94,74 +100,94 @@ inline void compute_possible_connections(const building &b, game &g) {
       }
     }
   }
+  */
+}
 
-  DEBUG_ONLY({
+inline void remove_travel_routes(game &g) {
+  for (const auto &route : g.travel_routes) {
+    auto [start, end] = std::minmax(route.start_building, route.end_building);
     for (const auto &connection : g.possible_connection) {
-      std::cerr << "possible connection: " << connection.first << " -> "
-                << connection.second
-    });
+      if (connection.first == start && connection.second == end) {
+        g.possible_connection.erase(connection);
+      } else if (segments_intersect(
+                     g.get_segment(connection.first, connection.second),
+                     g.get_segment(route.start_building, route.end_building))) {
+        g.possible_connection.erase(connection);
+      }
+    }
+  }
 }
 
 inline std::istream &operator>>(std::istream &in, game &g) {
-    in >> g.resources;
-    in.ignore();
-    LOG_DEBUG("resources: ", g.resources);
+  in >> g.resources;
+  in.ignore();
+  LOG_DEBUG("resources: ", g.resources);
 
-    in >> g.travel_routes;
-    in.ignore();
-    LOG_DEBUG("travel_routes: ", g.travel_routes.size());
-    DEBUG_ONLY({
-      for (const auto &route : g.travel_routes) {
-        LOG_DEBUG("route: ", route.start_building, " -> ", route.end_building,
-                  " (", route.capacity, ")")
-      }
-    });
-
-    in >> g.pods;
-    in.ignore();
-    LOG_DEBUG("pods: ", g.pods.size());
-    DEBUG_ONLY({
-      for (const auto &pod : g.pods) {
-        std::cerr << "pod: " << pod.identifier << " -> ";
-        for (const auto &stop : pod.stops) {
-          std::cerr << stop << " ";
-        }
-        std::cerr << std::endl;
-      }
-    });
-
-    std::vector<any_building> buildings;
-    in >> buildings;
-    for (auto &building : buildings) {
-      std::visit(overloaded{[&](landing_pad &&b) {
-                              compute_possible_connections(b, g);
-                              g.landing_pads.push_back(std::move(b));
-                            },
-                            [&](struct building &&b) {
-                              compute_possible_connections(b, g);
-                              g.buildings.push_back(std::move(b));
-                            }},
-                 std::move(building));
+  in >> g.travel_routes;
+  remove_travel_routes(g);
+  in.ignore();
+  LOG_DEBUG("travel_routes: ", g.travel_routes.size());
+  DEBUG_ONLY({
+    for (const auto &route : g.travel_routes) {
+      LOG_DEBUG("route: ", route.start_building, " -> ", route.end_building,
+                " (", route.capacity, ")")
     }
-    in.ignore();
-    LOG_DEBUG("landing_pads: ", g.landing_pads.size());
-    DEBUG_ONLY({
-      for (const auto &pad : g.landing_pads) {
-        std::cerr << "pad: " << pad.identifier << " (" << pad.coords.x << ", "
-                  << pad.coords.y << ") ";
-        for (const auto &worker : pad.expected_workers) {
-          std::cerr << worker << " ";
-        }
-        std::cerr << std::endl;
+  });
+
+  in >> g.pods;
+  in.ignore();
+  LOG_DEBUG("pods: ", g.pods.size());
+  DEBUG_ONLY({
+    for (const auto &pod : g.pods) {
+      std::cerr << "  pod: " << pod.identifier << " -> ";
+      for (const auto &stop : pod.stops) {
+        std::cerr << stop << " ";
       }
-    });
-    LOG_DEBUG("buildings: ", g.buildings.size());
-    DEBUG_ONLY({
-      for (const auto &building : g.buildings) {
-        std::cerr << "building: " << building.identifier << " ("
-                  << building.coords.x << ", " << building.coords.y << ") "
-                  << building.type << std::endl;
+      std::cerr << std::endl;
+    }
+  });
+
+  std::vector<any_building> buildings;
+  in >> buildings;
+  LOG_DEBUG("new buildings: ", buildings.size());
+  for (auto &building : buildings) {
+    std::visit(overloaded{[&](landing_pad &&b) {
+                            compute_possible_connections(b, g);
+                            g.landing_pads.push_back(std::move(b));
+                          },
+                          [&](struct building &&b) {
+                            compute_possible_connections(b, g);
+                            g.buildings.push_back(std::move(b));
+                          }},
+               std::move(building));
+  }
+  in.ignore();
+  LOG_DEBUG("landing_pads: ", g.landing_pads.size());
+  DEBUG_ONLY({
+    for (const auto &pad : g.landing_pads) {
+      std::cerr << "  pad: " << pad.identifier << " (" << pad.coords.x << ", "
+                << pad.coords.y << ") ";
+      for (const auto &worker : pad.expected_workers) {
+        std::cerr << worker << " ";
       }
-    });
-    return in;
+      std::cerr << std::endl;
+    }
+  });
+  LOG_DEBUG("buildings: ", g.buildings.size());
+  DEBUG_ONLY({
+    for (const auto &building : g.buildings) {
+      std::cerr << "  building: " << building.identifier << " ("
+                << building.coords.x << ", " << building.coords.y << ") "
+                << building.type << std::endl;
+    }
+  });
+
+  DEBUG_ONLY({
+    std::cerr << "possible connections: \n";
+    for (const auto &connection : g.possible_connection) {
+      std::cerr << "  " << connection.first << " -> " << connection.second << '\n';
+    }
+    std::cerr << std::endl;
+  });
+  return in;
 }

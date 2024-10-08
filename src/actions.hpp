@@ -77,6 +77,7 @@ inline std::ostream &operator<<(std::ostream &out, const action &a) {
 using actions = std::vector<action>;
 
 inline std::ostream& operator<<(std::ostream& out, const actions& a) {
+  if (a.empty()) return out << "WAIT";
   for (size_t i = 0; i < a.size(); ++i) {
     if (i > 0) out << ";";
     out << a[i];

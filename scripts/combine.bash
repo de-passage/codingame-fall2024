@@ -11,6 +11,8 @@ declare target_file="result.cpp"
 declare -a include_paths=()
 declare debug_mode=false
 
+set -e
+
 function err() {
   if [[ -t 2 ]]; then
     echo "$(tput setaf 1)$(tput bold)${*}$(tput sgr0)" >&2
@@ -35,6 +37,7 @@ function find_file_path() {
   target_base="$(basename "$target")"
 
   if [[ -f "${target_dir}/${target_base}" ]]; then
+    debug "Found ${target_dir}/${target_base}"
     echo "${target_dir}/${target_base}"
     return
   else
@@ -46,7 +49,7 @@ function find_file_path() {
       fi
     done
   fi
-  err "Missing input file '$target'"
+  exit 1
 }
 
 while (( $# > 0 )); do
@@ -108,14 +111,17 @@ if (( ${#source_file[@]} == 0 )); then
 fi
 
 temp_file=$(mktemp)
-trap 'rm "$temp_file"' EXIT
+if [[ "$debug_mode" == "false" ]]; then trap 'rm "$temp_file"' EXIT ; fi
 
 cat "${source_file[@]}" > "$temp_file"
 
 declare -A already_included=()
 
+# Process "" includes
+debug "Processing local includes"
 while true; do
   includes="$(grep -m 1 '^\s*#include\s\+"[^""]*"' "$temp_file" | sed 's/[^"]*"\([^"]*\)"/\1/')"
+  debug "includes:$includes"
   if [[ -z "$includes" ]]; then
     break
   fi
@@ -123,22 +129,64 @@ while true; do
     if ! filename="$(find_file_path "$line")" ; then
       exit 1
     fi
+    debug "Processing in '${filename}':
+    ${line}"
 
     if [[ -n "${already_included[$filename]}" ]]; then
       debug "Already included: $filename"
-      sed '/^\s*#include\s\+"'"${line/\//\/\/}"'"/d' -i "$temp_file"
+      escaped_line="${line//\//\\/}"
+      debug sed '/^\s*#include\s\+"'"${escaped_line}"'"/d' -i "$temp_file"''
+      sed '/^\s*#include\s\+"'"${escaped_line}"'"/d' -i "$temp_file"
     else
       already_included[$filename]=included
       debug "Splicing in '$filename'"
-      sed '/^\s*#include\s\+"'"${line/\//\/\/}"'"/ { r'"${filename}"'
+      escaped_line="${line//\//\\/}"
+      debug sed '/^\s*#include\s\+"'"${escaped_line}"'"/ { r'"${filename}"'
+      :p;n;bp }' "$temp_file" -i
+      sed '/^\s*#include\s\+"'"${escaped_line}"'"/ { r'"${filename}"'
       :p;n;bp }' "$temp_file" -i
     fi
   done <<< "$includes"
-  debug "includes:$includes"
 done
 
-# Cleanup
-remaining_includes=$(sed -n '/^\s*#include\s\+<\([^>]*\)>/p' "$temp_file" | sort | uniq)
+# Process <> includes, they are supposed to be system headers
+# If we find them, we'll include them anyway, if not we'll add them to the list to add at the beginning of the file
+debug "Processing system includes"
+declare -a system_includes=()
+while true; do
+  includes="$(grep -m 1 '^\s*#include\s\+<[^>]*>' "$temp_file" | sed 's/[^<]*<\([^>]*\)>/\1/')"
+  debug "includes:$includes"
+  if [[ -z "$includes" ]]; then
+    break
+  fi
+  while IFS= read -r line; do
+    if ! filename="$(find_file_path "$line")" ; then
+      debug "Ignoring missing system file '$line'"
+      filename="$line"
+      already_included[$filename]=included
+      system_includes+=("#include <$line>;")
+    fi
+    debug "Processing in '${filename}':
+    ${line}"
+
+    if [[ -n "${already_included[$filename]}" ]]; then
+      debug "Already included: $filename"
+      escaped_line="${line//\//\\/}"
+      debug sed '/^\s*#include\s\+<'"${escaped_line}"'>/d' -i "$temp_file"''
+      sed '/^\s*#include\s\+<'"${escaped_line}"'>/d' -i "$temp_file"''
+    else
+      already_included[$filename]=included
+      debug "Splicing in '$filename'"
+      escaped_line="${line//\//\\/}"
+      debug sed '/^\s*#include\s\+<'"${escaped_line}"'>/ { r'"${filename}"'
+      :p;n;bp }' "$temp_file" -i
+      sed '/^\s*#include\s\+<'"${escaped_line}"'>/ { r'"${filename}"'
+      :p;n;bp }' "$temp_file" -i
+    fi
+  done <<< "$includes"
+done
+
+# Cleanup, pushing all remaining includes to the top of the file
 sed '/^\s*#include\s\+<\([^>]*\)>/d;/^\s*#pragma\s\+once/d' -i "$temp_file"
-echo "$remaining_includes" > "$target_file"
+sed 's/;\s*/\n/g' <<< "${system_includes[*]}"| sort | uniq > "$target_file"
 cat "$temp_file" >> "$target_file"

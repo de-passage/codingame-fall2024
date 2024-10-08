@@ -1,8 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "name": "strong-types",
-  "version": "1.0.0",
-  "port-version": 1,
+  "version": "1.2.0",
   "dependencies": [
     {
       "name": "vcpkg-cmake",

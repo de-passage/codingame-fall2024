@@ -12,17 +12,16 @@
 #include <variant>
 #include <vector>
 
+#include <chrono>
 
 constexpr static inline std::hash<std::pair<building_id, building_id>>
     hash_pair;
 
-using transfer_time = dpsg::strong_types::number<int, struct transfer_time_tag,
-                                                 custom_modifiers::streamable>;
-constexpr transfer_time operator""_tt(unsigned long long int v) {
-  return transfer_time{static_cast<int>(v)};
-}
+using transfer_time =
+    dpsg::strong_types::number<int, struct transfer_time_tag,
+                               dpsg::strong_types::streamable>;
 using worker_count = dpsg::strong_types::number<int, struct worker_count_tag,
-                                                custom_modifiers::streamable>;
+                                                dpsg::strong_types::streamable>;
 
 struct turn_data {
   std::unordered_map<building_link, transfer_time> transfer_times;
@@ -38,12 +37,12 @@ actions decide(const game &g) {
     c.direct_connections.emplace(transport.start_building,
                                  transport.end_building);
     c.transfer_times.emplace(
-        std::pair{transport.start_building, transport.end_building}, 1_tt);
+        std::pair{transport.start_building, transport.end_building}, 1);
     if (transport.capacity > 0) {
       c.direct_connections.emplace(transport.end_building,
                                    transport.end_building);
       c.transfer_times.emplace(
-          std::pair{transport.end_building, transport.start_building}, 1_tt);
+          std::pair{transport.end_building, transport.start_building}, 1);
     }
   }
 
@@ -69,7 +68,16 @@ int main() {
 
   // game loop
   while (1) {
+    std::chrono::steady_clock::time_point start =
+        std::chrono::steady_clock::now();
     std::cin >> g;
     std::cout << decide(g) << std::endl;
+    std::chrono::steady_clock::time_point end =
+        std::chrono::steady_clock::now();
+    std::cerr << "Elapsed time: "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(end -
+                                                                       start)
+                     .count()
+              << "ms" << std::endl;
   }
 }

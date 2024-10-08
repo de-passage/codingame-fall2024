@@ -1,56 +1,17 @@
 #pragma once
 
 #include "strong_types.hpp"
+#include "strong_types/iostream.hpp"
+#include "strong_types/hash.hpp"
 #include <istream>
 #include <variant>
 #include <vector>
 
-namespace custom_modifiers {
-namespace st = dpsg::strong_types;
-namespace meta = st::black_magic;
-
-struct streamable {
-  template <class T>
-  struct type
-      : meta::for_each<
-            meta::tuple<meta::tuple<st::shift_left, std::basic_istream<char>>,
-                        meta::tuple<st::shift_right, std::basic_ostream<char>>>,
-            meta::apply<st::implement_binary_operation, T>> {};
-};
-
-namespace detail {
-template <class T> struct get_first;
-template <template <class...> class C, class T, class... Ts>
-struct get_first<C<T, Ts...>> {
-  using type = T;
-};
-} // namespace detail
-struct hashable {
-  template <class T> struct type {
-    using hashable = typename detail::get_first<T>::type;
-  };
-};
-
-template <class T>
-concept MadeHashable = requires(T obj) {
-  typename T::hashable;
-};
-} // namespace custom_modifiers
-
-namespace std {
-template <custom_modifiers::MadeHashable T> struct hash<T> {
-  std::size_t operator()(const T &value) const {
-    return std::hash<typename T::hashable>{}(
-        custom_modifiers::st::get_value_t{}(value));
-  }
-};
-} // namespace std
-
 template <class Tag>
 using strong_id =
     dpsg::strong_types::strong_value<int, Tag, dpsg::strong_types::comparable,
-                                     custom_modifiers::streamable,
-                                     custom_modifiers::hashable>;
+                                     dpsg::strong_types::streamable,
+                                     dpsg::strong_types::hashable>;
 
 #define DEFINE_ID_TYPE(identifier, suffix)                                     \
   using identifier = strong_id<struct identifier##_tag>;                       \
@@ -62,14 +23,14 @@ DEFINE_ID_TYPE(building_id, bid);
 DEFINE_ID_TYPE(pod_id, pid);
 
 using capacity_t = dpsg::strong_types::number<int, struct capacity_tag,
-                                              custom_modifiers::streamable>;
+                                              dpsg::strong_types::streamable>;
 using building_type = dpsg::strong_types::strong_value<
-    unsigned int, struct building_type_tag, custom_modifiers::streamable,
+    unsigned int, struct building_type_tag, dpsg::strong_types::streamable,
     dpsg::strong_types::comparable_with<unsigned int>,
-    dpsg::strong_types::comparable, custom_modifiers::hashable>;
+    dpsg::strong_types::comparable, dpsg::strong_types::hashable>;
 
 using resource_t = dpsg::strong_types::number<int, struct resource_tag,
-                                              custom_modifiers::streamable>;
+                                              dpsg::strong_types::streamable>;
 
 constexpr static inline building_type landing_pad_type{0};
 

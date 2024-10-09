@@ -30,6 +30,7 @@ set(generation_dependencies
   common.hpp
   math.hpp
   game.hpp
+  constants.hpp
 )
 list(TRANSFORM generation_dependencies PREPEND "${SOURCE_DIR}/")
 

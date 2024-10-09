@@ -84,3 +84,33 @@ inline std::ostream& operator<<(std::ostream& out, const actions& a) {
   }
   return out;
 }
+
+namespace detail {
+template <typename T, typename Variant>
+struct index_of_impl;
+template<typename T, typename... Ts>
+  struct index_of_impl<T, std::variant<Ts...>> {
+    constexpr static size_t value = []<size_t... Is>(std::index_sequence<Is...>) {
+      size_t result = 0;
+      ((std::is_same_v<T, std::variant_alternative_t<Is, std::variant<Ts...>>>
+        ? result = Is
+        : result), ...);
+      return result;
+    }(std::make_index_sequence<sizeof...(Ts)>{});
+  };
+}
+template<class T, class Variant>
+constexpr size_t index_of = detail::index_of_impl<T, Variant>::value;
+static_assert(index_of<wait, action> == 0);
+static_assert(index_of<build_tube, action> == 1);
+static_assert(index_of<upgrade_building, action> == 2);
+static_assert(index_of<build_teleporter, action> == 3);
+static_assert(index_of<build_pod, action> == 4);
+static_assert(index_of<destroy_pod, action> == 5);
+
+  struct desired_action {
+    action todo;
+    int priority;
+    resource_t cost;
+  };
+

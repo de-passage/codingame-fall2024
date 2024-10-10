@@ -31,10 +31,11 @@ function debug() {
 # Return the path to the file given in argument.
 # Goes through the list of include directories to find a match
 function find_file_path() {
-  target="$1"
+  local target="$1"
 
-  target_dir="$(dirname "$target")"
-  target_base="$(basename "$target")"
+  local target_dir="$(dirname "$target")"
+  local target_base="$(basename "$target")"
+  debug "Looking for '${target_dir}/${target_base}'"
 
   if [[ -f "${target_dir}/${target_base}" ]]; then
     debug "Found ${target_dir}/${target_base}"
@@ -42,9 +43,10 @@ function find_file_path() {
     return
   else
     for path in "${include_paths[@]}"; do
-      debug "Looking in ${path}"
-      if [[ -f "${path}/${target_dir}/${target_base}" ]]; then
-        echo "${path}/${target_dir}/${target_base}"
+      local expected_path="${path}/${target_dir}/${target_base}"
+      debug "Looking for '${expected_path}'"
+      if [[ -f "${expected_path}" ]]; then
+        echo "${expected_path}"
         return
       fi
     done
@@ -110,7 +112,7 @@ if (( ${#source_file[@]} == 0 )); then
   err "Need at least one source file"
 fi
 
-temp_file=$(mktemp)
+temp_file="${DEBUG_FILE:-$(mktemp)}"
 if [[ "$debug_mode" == "false" ]]; then trap 'rm "$temp_file"' EXIT ; fi
 
 cat "${source_file[@]}" > "$temp_file"
@@ -120,15 +122,18 @@ declare -A already_included=()
 # Process "" includes
 debug "Processing local includes"
 while true; do
-  includes="$(grep -m 1 '^\s*#include\s\+"[^""]*"' "$temp_file" | sed 's/[^"]*"\([^"]*\)"/\1/')"
-  debug "includes:$includes"
+  includes=$(sed -n '/^\s*#include\s\+"[^"]*"/ { s/\r//g; s/^[^"]*"\([^"]*\)"/\1/p; q }' "$temp_file" )
+  debug "includes:'${includes}'"
   if [[ -z "$includes" ]]; then
     break
   fi
+  found=false
   while IFS= read -r line; do
     if ! filename="$(find_file_path "$line")" ; then
-      exit 1
+      continue
     fi
+    found=true
+
     debug "Processing in '${filename}':
     ${line}"
 
@@ -147,6 +152,9 @@ while true; do
       :p;n;bp }' "$temp_file" -i
     fi
   done <<< "$includes"
+  if [[ "$found" == false ]]; then
+    err "Could not find file '$includes'"
+  fi
 done
 
 # Process <> includes, they are supposed to be system headers
@@ -154,7 +162,7 @@ done
 debug "Processing system includes"
 declare -a system_includes=()
 while true; do
-  includes="$(grep -m 1 '^\s*#include\s\+<[^>]*>' "$temp_file" | sed 's/[^<]*<\([^>]*\)>/\1/')"
+  includes=$(sed -n '/^\s*#include\s\+<[^>]*>/ { s/\r//g; s/^[^"]*<\([^>]*\)>/\1/p; q }' "$temp_file")
   debug "includes:$includes"
   if [[ -z "$includes" ]]; then
     break
@@ -178,8 +186,7 @@ while true; do
       already_included[$filename]=included
       debug "Splicing in '$filename'"
       escaped_line="${line//\//\\/}"
-      debug sed '/^\s*#include\s\+<'"${escaped_line}"'>/ { r'"${filename}"'
-      :p;n;bp }' "$temp_file" -i
+      debug sed '/^\s*#include\s\+<'"${escaped_line}"'>/ { r'"${filename}"':p;n;bp }' "$temp_file" -i
       sed '/^\s*#include\s\+<'"${escaped_line}"'>/ { r'"${filename}"'
       :p;n;bp }' "$temp_file" -i
     fi
